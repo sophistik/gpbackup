@@ -88,6 +88,12 @@ func getUserTableRelations(connectionPool *dbconn.DBConn) []Relation {
 		WHERE e.reloid IS NULL)`
 	}
 
+	// In GPDB 7+, root partitions are marked as relkind 'p'.
+	relkindFilter := `'r'`
+	if connectionPool.Version.AtLeast("7") {
+		relkindFilter = `'r', 'p'`
+	}
+
 	query := fmt.Sprintf(`
 	SELECT n.oid AS schemaoid,
 		c.oid AS oid,
@@ -97,10 +103,10 @@ func getUserTableRelations(connectionPool *dbconn.DBConn) []Relation {
 		JOIN pg_namespace n ON c.relnamespace = n.oid
 	WHERE %s
 		%s
-		AND relkind = 'r'
+		AND relkind IN (%s)
 		AND %s
 		ORDER BY c.oid`,
-		relationAndSchemaFilterClause(), childPartitionFilter, ExtensionFilterClause("c"))
+		relationAndSchemaFilterClause(), childPartitionFilter, relkindFilter, ExtensionFilterClause("c"))
 
 	results := make([]Relation, 0)
 	err := connectionPool.Select(&results, query)
@@ -110,6 +116,12 @@ func getUserTableRelations(connectionPool *dbconn.DBConn) []Relation {
 }
 
 func getUserTableRelationsWithIncludeFiltering(connectionPool *dbconn.DBConn, includedRelationsQuoted []string) []Relation {
+	// In GPDB 7+, root partitions are marked as relkind 'p'.
+	relkindFilter := `'r'`
+	if connectionPool.Version.AtLeast("7") {
+		relkindFilter = `'r', 'p'`
+	}
+
 	includeOids := getOidsFromRelationList(connectionPool, includedRelationsQuoted)
 	oidStr := strings.Join(includeOids, ", ")
 	query := fmt.Sprintf(`
@@ -120,8 +132,8 @@ func getUserTableRelationsWithIncludeFiltering(connectionPool *dbconn.DBConn, in
 	FROM pg_class c
 		JOIN pg_namespace n ON c.relnamespace = n.oid
 	WHERE c.oid IN (%s)
-		AND (relkind = 'r')
-	ORDER BY c.oid`, oidStr)
+		AND relkind IN (%s)
+	ORDER BY c.oid`, oidStr, relkindFilter)
 
 	results := make([]Relation, 0)
 	err := connectionPool.Select(&results, query)
