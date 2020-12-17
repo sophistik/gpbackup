@@ -184,7 +184,8 @@ func PrintCreateAggregateStatement(metadataFile *utils.FileWithByteCount, toc *t
 	if !aggDef.MInitValIsNull {
 		metadataFile.MustPrintf(",\n\tMINITCOND = '%s'", aggDef.MInitialValue)
 	}
-	switch aggDef.Parallel {
+	if aggDef.Parallel != "" {
+		switch aggDef.Parallel {
 		case "u":
 			metadataFile.MustPrintf(",\n\tPARALLEL = UNSAFE")
 		case "s":
@@ -193,6 +194,7 @@ func PrintCreateAggregateStatement(metadataFile *utils.FileWithByteCount, toc *t
 			metadataFile.MustPrintf(",\n\tPARALLEL = RESTRICTED")
 		default:
 			gplog.Fatal(errors.Errorf("unrecognized proparallel value for function %s", aggDef.Parallel), "")
+		}
 	}
 
 	metadataFile.MustPrintln("\n);")
