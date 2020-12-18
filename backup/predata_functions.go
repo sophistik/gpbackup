@@ -52,6 +52,7 @@ func PrintFunctionBodyOrPath(metadataFile *utils.FileWithByteCount, funcDef Func
 }
 
 func PrintFunctionModifiers(metadataFile *utils.FileWithByteCount, funcDef Function) {
+
 	switch funcDef.DataAccess {
 	case "c":
 		metadataFile.MustPrintf(" CONTAINS SQL")
@@ -106,15 +107,17 @@ func PrintFunctionModifiers(metadataFile *utils.FileWithByteCount, funcDef Funct
 		metadataFile.MustPrintf("\n%s", funcDef.Config)
 	}
 
-	switch funcDef.Parallel {
-	case "u":
-		metadataFile.MustPrintf(" PARALLEL UNSAFE")
-	case "s":
-		metadataFile.MustPrintf(" PARALLEL SAFE")
-	case "r":
-		metadataFile.MustPrintf(" PARALLEL RESTRICTED")
-	default:
-		gplog.Fatal(errors.Errorf("unrecognized proparallel value for function %s", funcDef.FQN()), "")
+	if connectionPool.Version.AtLeast("7") {
+		switch funcDef.Parallel {
+		case "u":
+			metadataFile.MustPrintf(" PARALLEL UNSAFE")
+		case "s":
+			metadataFile.MustPrintf(" PARALLEL SAFE")
+		case "r":
+			metadataFile.MustPrintf(" PARALLEL RESTRICTED")
+		default:
+			gplog.Fatal(errors.Errorf("unrecognized proparallel value for function %s", funcDef.FQN()), "")
+		}
 	}
 }
 

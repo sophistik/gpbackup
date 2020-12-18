@@ -14,22 +14,22 @@ import (
 )
 
 var _ = Describe("backup/predata_functions tests", func() {
+	var funcDefault backup.Function
+	var DEFAULT_PARALLEL string
+
 	BeforeEach(func() {
 		tocfile, backupfile = testutils.InitializeTestTOC(buffer, "predata")
+		funcDefault = backup.Function{Oid: 1, Schema: "public", Name: "func_name", ReturnsSet: false, FunctionBody: "add_two_ints", BinaryPath: "", Arguments: sql.NullString{String: "integer, integer", Valid: true}, IdentArgs: sql.NullString{String: "integer, integer", Valid: true}, ResultType: sql.NullString{String: "integer", Valid: true}, Volatility: "v", IsStrict: false, IsSecurityDefiner: false, Config: "", Cost: float32(1), NumRows: float32(0), DataAccess: "", Language: "internal", ExecLocation: "a"}
+		if connectionPool.Version.AtLeast("7") {
+			funcDefault.Parallel = "u"
+			funcDefault.PlannerSupport = "-"
+			DEFAULT_PARALLEL = " PARALLEL UNSAFE"
+		}
 	})
 	Describe("Functions involved in printing CREATE FUNCTION statements", func() {
 		var funcDef backup.Function
-		getPlannerSupport := func() string {
-			plannerSupportReplace := ""
-			if connectionPool.Version.AtLeast("7") {
-				plannerSupportReplace = "-"
-			}
-			return plannerSupportReplace
-		}
-		funcDefault := backup.Function{Oid: 1, Schema: "public", Name: "func_name", ReturnsSet: false, FunctionBody: "add_two_ints", BinaryPath: "", Arguments: sql.NullString{String: "integer, integer", Valid: true}, IdentArgs: sql.NullString{String: "integer, integer", Valid: true}, ResultType: sql.NullString{String: "integer", Valid: true}, Volatility: "v", IsStrict: false, IsSecurityDefiner: false, Config: "", Cost: float32(1), NumRows: float32(0), DataAccess: "", Language: "internal", ExecLocation: "a"}
 		BeforeEach(func() {
 			funcDef = funcDefault
-			funcDef.PlannerSupport = getPlannerSupport()
 		})
 
 		Describe("PrintCreateFunctionStatement", func() {
@@ -42,24 +42,24 @@ var _ = Describe("backup/predata_functions tests", func() {
 			It("prints a function definition for an internal function without a binary path", func() {
 				backup.PrintCreateFunctionStatement(backupfile, tocfile, funcDef, funcMetadata)
 				testutils.ExpectEntry(tocfile.PredataEntries, 0, "public", "", "func_name(integer, integer)", "FUNCTION")
-				testutils.AssertBufferContents(tocfile.PredataEntries, buffer, `CREATE FUNCTION public.func_name(integer, integer) RETURNS integer AS
+				testutils.AssertBufferContents(tocfile.PredataEntries, buffer, fmt.Sprintf(`CREATE FUNCTION public.func_name(integer, integer) RETURNS integer AS
 $$add_two_ints$$
-LANGUAGE internal;`)
+LANGUAGE internal%s;`, DEFAULT_PARALLEL))
 			})
 			It("prints a function definition for a function that returns a set", func() {
 				funcDef.ReturnsSet = true
 				funcDef.ResultType = sql.NullString{String: "SETOF integer", Valid: true}
 				backup.PrintCreateFunctionStatement(backupfile, tocfile, funcDef, funcMetadata)
-				testutils.AssertBufferContents(tocfile.PredataEntries, buffer, `CREATE FUNCTION public.func_name(integer, integer) RETURNS SETOF integer AS
+				testutils.AssertBufferContents(tocfile.PredataEntries, buffer, fmt.Sprintf(`CREATE FUNCTION public.func_name(integer, integer) RETURNS SETOF integer AS
 $$add_two_ints$$
-LANGUAGE internal;`)
+LANGUAGE internal%s;`, DEFAULT_PARALLEL))
 			})
 			It("prints a function definition for a function with permissions, an owner, security label, and a comment", func() {
 				funcMetadata := testutils.DefaultMetadata("FUNCTION", true, true, true, true)
 				backup.PrintCreateFunctionStatement(backupfile, tocfile, funcDef, funcMetadata)
-				expectedStatements := []string{`CREATE FUNCTION public.func_name(integer, integer) RETURNS integer AS
+				expectedStatements := []string{fmt.Sprintf(`CREATE FUNCTION public.func_name(integer, integer) RETURNS integer AS
 $$add_two_ints$$
-LANGUAGE internal;`,
+LANGUAGE internal%s;`, DEFAULT_PARALLEL),
 					"COMMENT ON FUNCTION public.func_name(integer, integer) IS 'This is a function comment.';",
 					"ALTER FUNCTION public.func_name(integer, integer) OWNER TO testrole;",
 					`REVOKE ALL ON FUNCTION public.func_name(integer, integer) FROM PUBLIC;
@@ -71,12 +71,16 @@ GRANT ALL ON FUNCTION public.func_name(integer, integer) TO testrole;`,
 			})
 			It("prints a function definition for a stored procedure", func() {
 				testutils.SkipIfBefore7(connectionPool)
-				procDef := backup.Function{Oid: 1, Schema: "public", Name: "my_procedure", Kind: "p", ReturnsSet: false, FunctionBody: "do_something", BinaryPath: "", Arguments: sql.NullString{String: "", Valid: true}, IdentArgs: sql.NullString{String: "", Valid: true}, ResultType: sql.NullString{String: "", Valid: false}, Volatility: "", IsStrict: false, IsSecurityDefiner: false, Config: "", NumRows: float32(0), DataAccess: "", Language: "SQL", ExecLocation: "a", PlannerSupport: getPlannerSupport()}
+				procDef := backup.Function{Oid: 1, Schema: "public", Name: "my_procedure", Kind: "p", ReturnsSet: false, FunctionBody: "do_something", BinaryPath: "", Arguments: sql.NullString{String: "", Valid: true}, IdentArgs: sql.NullString{String: "", Valid: true}, ResultType: sql.NullString{String: "", Valid: false}, Volatility: "", IsStrict: false, IsSecurityDefiner: false, Config: "", NumRows: float32(0), DataAccess: "", Language: "SQL", ExecLocation: "a"}
+				if connectionPool.Version.AtLeast("7") {
+					procDef.Parallel = "u"
+					procDef.PlannerSupport = "-"
+				}
 				backup.PrintCreateFunctionStatement(backupfile, tocfile, procDef, funcMetadata)
 				testutils.ExpectEntry(tocfile.PredataEntries, 0, "public", "", "my_procedure()", "FUNCTION")
-				testutils.AssertBufferContents(tocfile.PredataEntries, buffer, `CREATE PROCEDURE public.my_procedure() AS
+				testutils.AssertBufferContents(tocfile.PredataEntries, buffer, fmt.Sprintf(`CREATE PROCEDURE public.my_procedure() AS
 $$do_something$$
-LANGUAGE SQL;`)
+LANGUAGE SQL%s;`, DEFAULT_PARALLEL))
 			})
 		})
 		Describe("PrintFunctionBodyOrPath", func() {
@@ -142,7 +146,8 @@ $_$`)
 				It("does not print anything for 'v'", func() {
 					funcDef.Volatility = "v"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "STABLE")
+					testhelper.NotExpectRegexp(buffer, "IMMUTABLE")
 				})
 				It("prints 's' as STABLE", func() {
 					funcDef.Volatility = "s"
@@ -191,7 +196,7 @@ $_$`)
 				It("Default", func() {
 					funcDef.ExecLocation = "a"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "EXECUTE")
 				})
 				It("print 'm' as EXECUTE ON MASTER", func() {
 					funcDef.ExecLocation = "m"
@@ -225,13 +230,13 @@ $_$`)
 					funcDef.Cost = 1
 					funcDef.Language = "c"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "COST")
 				})
 				It("does not print 'COST 1' if Cost is set to 1 and language is internal", func() {
 					funcDef.Cost = 1
 					funcDef.Language = "internal"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "COST")
 				})
 				It("prints 'COST 100' if Cost is set to 100 and language is c", func() {
 					funcDef.Cost = 100
@@ -249,7 +254,7 @@ $_$`)
 					funcDef.Cost = 100
 					funcDef.Language = "sql"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "COST 100")
 				})
 			})
 			Context("NumRows cases", func() {
@@ -268,19 +273,19 @@ $_$`)
 					funcDef.NumRows = 100
 					funcDef.ReturnsSet = false
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "ROWS")
 				})
 				It("does not print 'ROWS' if Rows is set to 0", func() {
 					funcDef.NumRows = 0
 					funcDef.ReturnsSet = true
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "ROWS")
 				})
 				It("does not print 'ROWS' if Rows is set to 1000", func() {
 					funcDef.NumRows = 1000
 					funcDef.ReturnsSet = true
 					backup.PrintFunctionModifiers(backupfile, funcDef)
-					Expect(buffer.Contents()).To(Equal([]byte{}))
+					testhelper.NotExpectRegexp(buffer, "ROWS")
 				})
 			})
 			It("prints config statements if any are set", func() {
@@ -290,21 +295,25 @@ $_$`)
 			})
 			Context("Parallel cases", func() {
 				It("prints 'u' as 'PARALLEL UNSAFE'", func() {
+					testutils.SkipIfBefore7(connectionPool)
 					funcDef.Parallel = "u"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
 					testhelper.ExpectRegexp(buffer, "PARALLEL UNSAFE")
 				})
 				It("prints 's' as 'PARALLEL SAFE'", func() {
+					testutils.SkipIfBefore7(connectionPool)
 					funcDef.Parallel = "s"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
 					testhelper.ExpectRegexp(buffer, "PARALLEL SAFE")
 				})
 				It("prints 'r' as 'PARALLEL RESTRICTED'", func() {
+					testutils.SkipIfBefore7(connectionPool)
 					funcDef.Parallel = "r"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
 					testhelper.ExpectRegexp(buffer, "PARALLEL RESTRICTED")
 				})
 				It("panics is there is an unrecognized parallel value", func() {
+					testutils.SkipIfBefore7(connectionPool)
 					defer testhelper.ShouldPanicWithMessage("unrecognized proparallel value for function public.func_name")
 					funcDef.Parallel = "unknown_value"
 					backup.PrintFunctionModifiers(backupfile, funcDef)
