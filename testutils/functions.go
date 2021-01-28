@@ -308,6 +308,14 @@ func DefaultACLWithGrantWithout(grantee string, objType string, revoke ...string
 	return defaultACL
 }
 
+func DefaultLocale() string {
+	defaultLocale, err := exec.Command("bash", "-c", "locale -a | grep -i en_US.utf.*8 | head -1").CombinedOutput()
+	if err != nil {
+		Fail(fmt.Sprintf("Error to find utf8 locale: %s\n", err))
+	}
+	return strings.TrimSpace(string(defaultLocale))
+}
+
 /*
  * Wrapper functions around gomega operators for ease of use in tests
  */

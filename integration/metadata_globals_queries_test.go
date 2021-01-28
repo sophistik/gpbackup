@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"github.com/greenplum-db/gp-common-go-libs/structmatcher"
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpbackup/backup"
@@ -57,8 +58,8 @@ var _ = Describe("backup integration tests", func() {
 				 * These values are slightly different between mac and linux
 				 * so we use a regexp to match them
 				 */
-				Expect(result.Collate).To(MatchRegexp("en_US.utf-?8"))
-				Expect(result.CType).To(MatchRegexp("en_US.utf-?8"))
+				Expect(result.Collate).To(MatchRegexp("(?i)en_US.utf-?8"))
+				Expect(result.CType).To(MatchRegexp("(?i)en_US.utf-?8"))
 			}
 		})
 	})
@@ -75,8 +76,9 @@ var _ = Describe("backup integration tests", func() {
 				testhelper.AssertQueryRuns(connectionPool, "CREATE DATABASE create_test_db ENCODING 'UTF8' TEMPLATE template0")
 				expectedDB = backup.Database{Oid: 1, Name: "create_test_db", Tablespace: "pg_default", Encoding: "UTF8", Collate: "", CType: ""}
 			} else {
-				testhelper.AssertQueryRuns(connectionPool, "CREATE DATABASE create_test_db ENCODING 'UTF8' LC_COLLATE 'en_US.utf-8' LC_CTYPE 'en_US.utf-8' TEMPLATE template0")
-				expectedDB = backup.Database{Oid: 1, Name: "create_test_db", Tablespace: "pg_default", Encoding: "UTF8", Collate: "en_US.utf-8", CType: "en_US.utf-8"}
+				locale := testutils.DefaultLocale()
+				testhelper.AssertQueryRuns(connectionPool, fmt.Sprintf("CREATE DATABASE create_test_db ENCODING 'UTF8' LC_COLLATE '%s' LC_CTYPE '%s' TEMPLATE template0", locale, locale))
+				expectedDB = backup.Database{Oid: 1, Name: "create_test_db", Tablespace: "pg_default", Encoding: "UTF8", Collate: locale, CType: locale}
 			}
 			defer testhelper.AssertQueryRuns(connectionPool, "DROP DATABASE create_test_db")
 
