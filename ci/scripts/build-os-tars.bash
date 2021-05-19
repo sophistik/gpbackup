@@ -16,6 +16,7 @@ pushd gpbackup_tar
   cp gpbackup gpbackup_helper gprestore gpbackup_s3_plugin gpbackup_manager bin/
   cp ../ddboost_components/gpbackup_ddboost_plugin bin/
   cp ../ddboost_components/libDDBoost.so lib/
+  cp ../ddboost_components/liblog.so lib/
   tar -czvf bin_gpbackup.tar.gz bin/ lib/ open_source_licenses_VMware_Tanzu_Greenplum_Backup_and_Restore.txt
 
   tar -czvf gpbackup-$(cat version).tar.gz bin_gpbackup.tar.gz install_gpdb_component *version

@@ -22,3 +22,4 @@ popd
 echo ${ddboost_plugin_version} > ddboost_components/ddboost_plugin_version
 cp gpbackup_ddboost_plugin/gpbackup_ddboost_plugin ddboost_components/
 cp gpbackup_ddboost_plugin/DDBoostSDK/lib/release/linux/64/libDDBoost.so ddboost_components/
+cp gpbackup_ddboost_plugin/log/liblog.so ddboost_components/
