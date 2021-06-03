@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/greenplum-db/gpbackup/toc"
 	"github.com/greenplum-db/gpbackup/utils"
@@ -36,6 +37,12 @@ type RestoreReader struct {
 	bufReader  *bufio.Reader
 	seekReader io.ReadSeeker
 	readerType ReaderType
+}
+
+type RestoreWriterInfo struct {
+	writer	*bufio.Writer
+	file	*os.File
+	err	error
 }
 
 func (r *RestoreReader) positionReader(pos uint64) error {
@@ -97,6 +104,9 @@ func doRestoreAgent() error {
 	log(fmt.Sprintf("Using reader type: %s", reader.readerType))
 
 	for i, oid := range oidList {
+		skipCh := make(chan bool, 1)
+		writerInfoCh := make(chan RestoreWriterInfo, 1)
+
 		if wasTerminated {
 			return errors.New("Terminated due to user request")
 		}
@@ -114,40 +124,73 @@ func doRestoreAgent() error {
 			}
 		}
 
+		go func() {
+			skipFileName := fmt.Sprintf("%s_skip_%d", *pipeFile, oid)
+			currentPipeName := currentPipe
+			for {
+				if !utils.FileExists(currentPipeName) {
+					log(fmt.Sprintf("Pipe was removed %s, checking for skip file is not necessary", currentPipeName))
+					// pipe was removed in the LoopEnd or because of error
+					break
+				} else if utils.FileExists(skipFileName) {
+					log(fmt.Sprintf("Skip file discovered for entry %d", oid))
+					skipCh <- true
+					break
+				} else {
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+		}()
+
+		go func() {
+			info := RestoreWriterInfo{}
+			info.writer, info.file, info.err = getRestorePipeWriter(currentPipe)
+			writerInfoCh <- info
+		}()
+
 		start = tocEntries[uint(oid)].StartByte
 		end = tocEntries[uint(oid)].EndByte
 
 		log(fmt.Sprintf("Opening pipe for oid %d: %s", oid, currentPipe))
-		writer, writeHandle, err = getRestorePipeWriter(currentPipe)
-		if err != nil {
-			// In the case this error is hit it means we have lost the
-			// ability to open pipes normally, so hard quit even if
-			// --on-error-continue is given
-			_ = utils.RemoveFileIfExists(currentPipe)
-			return err
-		}
 
-		log(fmt.Sprintf("Data Reader - Start Byte: %d; End Byte: %d; Last Byte: %d", start, end, lastByte))
-		err = reader.positionReader(start - lastByte)
-		if err != nil {
-			return err
-		}
+		select {
+		case writerInfo :=  <-writerInfoCh:
+			log(fmt.Sprintf("Got writer for oid %d", oid))
+			writer = writerInfo.writer
+			writeHandle = writerInfo.file
+			err = writerInfo.err
+			if err != nil {
+				// In the case this error is hit it means we have lost the
+				// ability to open pipes normally, so hard quit even if
+				// --on-error-continue is given
+				_ = utils.RemoveFileIfExists(currentPipe)
+				return err
+			}
 
-		log(fmt.Sprintf("Restoring table with oid %d", oid))
-		bytesRead, err = reader.copyData(int64(end-start))
-		if err != nil {
-			// In case COPY FROM or copyN fails in the middle of a load. We
-			// need to update the lastByte with the amount of bytes that was
-			// copied before it errored out
-			lastByte += uint64(bytesRead)
-			err = errors.Wrap(err, strings.Trim(errBuf.String(), "\x00"))
-			goto LoopEnd
-		}
-		lastByte = end
-		log(fmt.Sprintf("Copied %d bytes into the pipe", bytesRead))
+			log(fmt.Sprintf("Data Reader - Start Byte: %d; End Byte: %d; Last Byte: %d", start, end, lastByte))
+			err = reader.positionReader(start - lastByte)
+			if err != nil {
+				return err
+			}
 
-		log(fmt.Sprintf("Closing pipe for oid %d: %s", oid, currentPipe))
-		err = flushAndCloseRestoreWriter()
+			log(fmt.Sprintf("Restoring table with oid %d", oid))
+			bytesRead, err = reader.copyData(int64(end-start))
+			if err != nil {
+				// In case COPY FROM or copyN fails in the middle of a load. We
+				// need to update the lastByte with the amount of bytes that was
+				// copied before it errored out
+				lastByte += uint64(bytesRead)
+				err = errors.Wrap(err, strings.Trim(errBuf.String(), "\x00"))
+				goto LoopEnd
+			}
+			lastByte = end
+			log(fmt.Sprintf("Copied %d bytes into the pipe", bytesRead))
+
+			log(fmt.Sprintf("Closing pipe for oid %d: %s", oid, currentPipe))
+			err = flushAndCloseRestoreWriter()
+		case _ = <-skipCh:
+			log(fmt.Sprintf("Skipping the oid %d", oid))
+		}
 		if err != nil {
 			goto LoopEnd
 		}
