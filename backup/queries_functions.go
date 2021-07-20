@@ -284,15 +284,12 @@ func GetFunctionArgsAndIdentArgs(connectionPool *dbconn.DBConn) (map[uint32]stri
 		if funcArgs.Name == `""` {
 			funcArgs.Name = ""
 		}
-		modeStr := ""
-		switch funcArgs.Mode {
-		case "b":
-			modeStr = "INOUT "
-		case "o":
-			modeStr = "OUT "
-		case "v":
-			modeStr = "VARIADIC "
+		modeStrMap := map[string]string{
+			"b":	"INOUT ",
+			"o":	"OUT ",
+			"v":	"VARIADIC ",
 		}
+		modeStr := modeStrMap[funcArgs.Mode]
 		if funcArgs.Name != "" {
 			funcArgs.Name += " "
 		}

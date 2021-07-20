@@ -224,19 +224,14 @@ func makeCustomFormatOpts(tokens []string) string {
 
 func GenerateFormatStatement(extTableDef ExternalTableDefinition) string {
 	var formatStatement string
-	formatType := ""
-	switch extTableDef.FormatType {
-	case "t":
-		formatType = "TEXT"
-	case "c":
-		formatType = "CSV"
-	case "b":
-		formatType = "CUSTOM"
-	case "a":
-		formatType = "AVRO"
-	case "p":
-		formatType = "PARQUET"
+	formatTypeMap := map[string]string{
+		"t":	"TEXT",
+		"c":	"CSV",
+		"b":	"CUSTOM",
+		"a":	"AVRO",
+		"p":	"PARQUET",
 	}
+	formatType := formatTypeMap[extTableDef.FormatType]
 	formatStatement += fmt.Sprintf("FORMAT '%s'", formatType)
 
 	if extTableDef.FormatOpts != "" {
@@ -255,6 +250,10 @@ func GenerateFormatStatement(extTableDef ExternalTableDefinition) string {
 
 func generateLogErrorStatement(extTableDef ExternalTableDefinition) string {
 	logErrorStatement := ""
+	rejectLimitTypeMap := map[string]string{
+		"r":	"ROWS",
+		"p":	"PERCENT",
+	}
 	if extTableDef.LogErrors {
 		if extTableDef.LogErrPersist {
 			logErrorStatement += "\nLOG ERRORS PERSISTENTLY"
@@ -267,12 +266,7 @@ func generateLogErrorStatement(extTableDef ExternalTableDefinition) string {
 	}
 	if extTableDef.RejectLimit != 0 {
 		logErrorStatement += fmt.Sprintf("\nSEGMENT REJECT LIMIT %d ", extTableDef.RejectLimit)
-		switch extTableDef.RejectLimitType {
-		case "r":
-			logErrorStatement += "ROWS"
-		case "p":
-			logErrorStatement += "PERCENT"
-		}
+			logErrorStatement += rejectLimitTypeMap[extTableDef.RejectLimitType]
 	}
 
 	return logErrorStatement

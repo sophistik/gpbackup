@@ -279,13 +279,16 @@ func ParseACL(aclStr string) *ACL {
 
 func (obj ObjectMetadata) GetPrivilegesStatements(objectName string, objectType string, columnName ...string) string {
 	statements := make([]string, 0)
-	typeStr := fmt.Sprintf("%s ", objectType)
-	if objectType == "VIEW" || objectType == "FOREIGN TABLE" || objectType == "MATERIALIZED VIEW" {
-		typeStr = ""
-	} else if objectType == "COLUMN" {
-		typeStr = "TABLE "
-	} else if objectType == "AGGREGATE" {
-		typeStr = "FUNCTION "
+	typeStrMap := map[string]string{
+		"COLUMN":				"TABLE",
+		"AGGREGATE":			"FUNCTION",
+		"VIEW":					"",
+		"FOREIGN TABLE":		"",
+		"MATERIALIZED VIEW":	"",
+	}
+	typeStr, ok := typeStrMap[objectType]
+	if !ok {
+		typeStr = fmt.Sprintf("%s ", objectType)
 	}
 	columnStr := ""
 	if len(columnName) == 1 {
@@ -495,6 +498,14 @@ func (obj ObjectMetadata) GetSecurityLabelStatement(objectName string, objectTyp
 }
 
 func PrintDefaultPrivilegesStatements(metadataFile *utils.FileWithByteCount, toc *toc.TOC, privileges []DefaultPrivileges) {
+
+	objectTypeMap := map[string]string{
+		"r":	"TABLE",
+		"S":	"SEQUENCE",
+		"f":	"FUNCTION", // Default case, don't print anything else
+		"T":	"TYPE",
+	}
+
 	for _, priv := range privileges {
 		statements := make([]string, 0)
 		roleStr := ""
@@ -506,17 +517,8 @@ func PrintDefaultPrivilegesStatements(metadataFile *utils.FileWithByteCount, toc
 			schemaStr = fmt.Sprintf(" IN SCHEMA %s", priv.Schema)
 		}
 
-		objectType := ""
-		switch priv.ObjectType {
-		case "r":
-			objectType = "TABLE"
-		case "S":
-			objectType = "SEQUENCE"
-		case "f":
-			objectType = "FUNCTION"
-		case "T":
-			objectType = "TYPE"
-		}
+		objectType := objectTypeMap[priv.ObjectType]
+
 		alterPrefix := fmt.Sprintf("ALTER DEFAULT PRIVILEGES%s%s", roleStr, schemaStr)
 		statements = append(statements, fmt.Sprintf("%s REVOKE ALL ON %sS FROM PUBLIC;", alterPrefix, objectType))
 		if priv.Owner != "" {

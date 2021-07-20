@@ -46,32 +46,30 @@ func PrintFunctionBodyOrPath(metadataFile *utils.FileWithByteCount, funcDef Func
 }
 
 func PrintFunctionModifiers(metadataFile *utils.FileWithByteCount, funcDef Function) {
-	switch funcDef.DataAccess {
-	case "c":
-		metadataFile.MustPrintf(" CONTAINS SQL")
-	case "m":
-		metadataFile.MustPrintf(" MODIFIES SQL DATA")
-	case "n":
-		metadataFile.MustPrintf(" NO SQL")
-	case "r":
-		metadataFile.MustPrintf(" READS SQL DATA")
+	dataAccessStrMap := map[string]string{
+		"c":	" CONTAINS SQL",
+		"m":	" MODIFIES SQL DATA",
+		"n":	" NO SQL",
+		"r":	" READS SQL DATA",
 	}
-	switch funcDef.Volatility {
-	case "i":
-		metadataFile.MustPrintf(" IMMUTABLE")
-	case "s":
-		metadataFile.MustPrintf(" STABLE")
-	case "v": // Default case, don't print anything else
+
+	volatilityStrMap := map[string]string{
+		"i":	" IMMUTABLE",
+		"s":	" STABLE",
+		"v":	"", // Default case, don't print anything else
 	}
-	switch funcDef.ExecLocation {
-	case "m":
-		metadataFile.MustPrintf(" EXECUTE ON MASTER")
-	case "s":
-		metadataFile.MustPrintf(" EXECUTE ON ALL SEGMENTS")
-	case "i":
-		metadataFile.MustPrintf(" EXECUTE ON INITPLAN")
-	case "a": // Default case, don't print anything else
+
+	execLocationStrMap := map[string]string{
+		"m":	" EXECUTE ON MASTER",
+		"s":	" EXECUTE ON ALL SEGMENTS",
+		"i":	" EXECUTE ON INITPLAN",
+		"a":	"",  // Default case, don't print anything else
 	}
+
+	metadataFile.MustPrintf(dataAccessStrMap[funcDef.DataAccess])
+	metadataFile.MustPrintf(volatilityStrMap[funcDef.Volatility])
+	metadataFile.MustPrintf(execLocationStrMap[funcDef.ExecLocation])
+
 	if funcDef.IsWindow {
 		metadataFile.MustPrintf(" WINDOW")
 	}
@@ -171,24 +169,23 @@ func PrintCreateAggregateStatement(metadataFile *utils.FileWithByteCount, toc *t
 }
 
 func PrintCreateCastStatement(metadataFile *utils.FileWithByteCount, toc *toc.TOC, castDef Cast, castMetadata ObjectMetadata) {
+	funcFQN := utils.MakeFQN(castDef.FunctionSchema, castDef.FunctionName)
 	start := metadataFile.ByteCount
 	metadataFile.MustPrintf("\n\nCREATE CAST %s\n", castDef.FQN())
-	switch castDef.CastMethod {
-	case "i":
-		metadataFile.MustPrintf("\tWITH INOUT")
-	case "b":
-		metadataFile.MustPrintf("\tWITHOUT FUNCTION")
-	case "f":
-		funcFQN := utils.MakeFQN(castDef.FunctionSchema, castDef.FunctionName)
-		metadataFile.MustPrintf("\tWITH FUNCTION %s(%s)", funcFQN, castDef.FunctionArgs)
+
+	castMethodStrMap := map[string]string{
+		"i":	"\tWITH INOUT",
+		"b":	"\tWITHOUT FUNCTION",
+		"f":	fmt.Sprintf("\tWITH FUNCTION %s(%s)", funcFQN, castDef.FunctionArgs),
 	}
-	switch castDef.CastContext {
-	case "a":
-		metadataFile.MustPrintf("\nAS ASSIGNMENT")
-	case "i":
-		metadataFile.MustPrintf("\nAS IMPLICIT")
-	case "e": // Default case, don't print anything else
+	metadataFile.MustPrintf(castMethodStrMap[castDef.CastMethod])
+
+	castContextStrMap := map[string]string{
+		"a":	"\nAS ASSIGNMENT",
+		"i":	"\nAS IMPLICIT",
+		"e":	"", // Default case, don't print anything else
 	}
+	metadataFile.MustPrintf(castContextStrMap[castDef.CastContext])
 	metadataFile.MustPrintf(";")
 
 	section, entry := castDef.GetMetadataEntry()

@@ -70,6 +70,12 @@ func PrintCreateTriggerStatements(metadataFile *utils.FileWithByteCount, toc *to
 }
 
 func PrintCreateEventTriggerStatements(metadataFile *utils.FileWithByteCount, toc *toc.TOC, eventTriggers []EventTrigger, eventTriggerMetadata MetadataMap) {
+
+	enabledStrMap := map[string]string{
+		"D":	"DISABLE",
+		"A":	"ENABLE ALWAYS",
+		"R":	"ENABLE REPLICA",
+	}
 	for _, eventTrigger := range eventTriggers {
 		start := metadataFile.ByteCount
 		section, entry := eventTrigger.GetMetadataEntry()
@@ -85,15 +91,8 @@ func PrintCreateEventTriggerStatements(metadataFile *utils.FileWithByteCount, to
 		entry.ReferenceObject = eventTrigger.Name
 		entry.ObjectType = "EVENT TRIGGER METADATA"
 		if eventTrigger.Enabled != "O" {
-			var enableOption string
-			switch eventTrigger.Enabled {
-			case "D":
-				enableOption = "DISABLE"
-			case "A":
-				enableOption = "ENABLE ALWAYS"
-			case "R":
-				enableOption = "ENABLE REPLICA"
-			default:
+			enableOption, ok := enabledStrMap[eventTrigger.Enabled]
+			if !ok {
 				enableOption = "ENABLE"
 			}
 			start := metadataFile.ByteCount

@@ -88,27 +88,25 @@ func PrintCreateBaseTypeStatement(metadataFile *utils.FileWithByteCount, toc *to
 	if base.IsPassedByValue {
 		metadataFile.MustPrintf(",\n\tPASSEDBYVALUE")
 	}
+
+	alligmentStrMap := map[string]string{
+		"d":	",\n\tALIGNMENT = double",
+		"i":	",\n\tALIGNMENT = int4",
+		"s":	",\n\tALIGNMENT = int2",
+		"c":	"", // Default case, don't print anything else
+	}
 	if base.Alignment != "" {
-		switch base.Alignment {
-		case "d":
-			metadataFile.MustPrintf(",\n\tALIGNMENT = double")
-		case "i":
-			metadataFile.MustPrintf(",\n\tALIGNMENT = int4")
-		case "s":
-			metadataFile.MustPrintf(",\n\tALIGNMENT = int2")
-		case "c": // Default case, don't print anything else
-		}
+			metadataFile.MustPrintf(alligmentStrMap[base.Alignment])
+	}
+
+	storageStrMap := map[string]string{
+		"e":	",\n\tSTORAGE = external",
+		"m":	",\n\tSTORAGE = main",
+		"x":	",\n\tSTORAGE = extended",
+		"p":	"", // Default case, don't print anything else
 	}
 	if base.Storage != "" {
-		switch base.Storage {
-		case "e":
-			metadataFile.MustPrintf(",\n\tSTORAGE = external")
-		case "m":
-			metadataFile.MustPrintf(",\n\tSTORAGE = main")
-		case "x":
-			metadataFile.MustPrintf(",\n\tSTORAGE = extended")
-		case "p": // Default case, don't print anything else
-		}
+		metadataFile.MustPrintf(storageStrMap[base.Storage])
 	}
 	if base.DefaultVal != "" {
 		metadataFile.MustPrintf(",\n\tDEFAULT = '%s'", base.DefaultVal)
