@@ -7,19 +7,18 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
-	"path/filepath"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/greenplum-db/gpbackup/utils"
+	"golang.org/x/sys/unix"
 )
 
 /*
@@ -55,6 +54,7 @@ var (
 	restoreAgent     *bool
 	tocFile          *string
 	isFiltered       *bool
+	skipIndexBuild   *bool
 )
 
 func DoHelper() {
@@ -112,6 +112,7 @@ func InitializeGlobals() {
 	restoreAgent = flag.Bool("restore-agent", false, "Use gpbackup_helper as an agent for restore")
 	tocFile = flag.String("toc-file", "", "Absolute path to the table of contents file")
 	isFiltered = flag.Bool("with-filters", false, "Used with table/schema filters")
+	skipIndexBuild = flag.Bool("skip-index-build", false, "Disable building indexes")
 
 	if *onErrorContinue && !*restoreAgent {
 		fmt.Printf("--on-error-continue flag can only be used with --restore-agent flag")

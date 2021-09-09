@@ -289,6 +289,33 @@ func ExecuteRestoreMetadataStatements(statements []toc.StatementWithType, object
 	return numErrors
 }
 
+func WriteRestoreStatementsIntoFile(statements []toc.StatementWithType, objectsTitle string, progressBar utils.ProgressBar, showProgressBar int, executeInParallel bool) int32 {
+	var (
+		numErrors int32
+		offset    int64
+	)
+
+	stmts := make([]toc.StatementWithOffset, len(statements))
+	for i := range statements {
+		stmts[i] = toc.StatementWithOffset{
+			Schema:    statements[i].Schema,
+			Name:      statements[i].Name,
+			Statement: statements[i].Statement,
+			Offset:    offset,
+		}
+
+		offset += int64(len(statements[i].Statement))
+	}
+
+	if progressBar == nil {
+		numErrors = WriteStatementsAndCreateProgressBar(stmts, objectsTitle, showProgressBar, executeInParallel, "indexes.sql")
+	} else {
+		numErrors = WriteStatements(stmts, progressBar, executeInParallel, "indexes.sql")
+	}
+
+	return numErrors
+}
+
 func GetBackupFPInfoListFromRestorePlan() []filepath.FilePathInfo {
 	fpInfoList := make([]filepath.FilePathInfo, 0)
 	for _, entry := range backupConfig.RestorePlan {

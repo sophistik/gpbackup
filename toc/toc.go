@@ -98,6 +98,13 @@ type StatementWithType struct {
 	Statement       string
 }
 
+type StatementWithOffset struct {
+	Schema    string
+	Name      string
+	Statement string
+	Offset    int64
+}
+
 func GetIncludedPartitionRoots(tocDataEntries []MasterDataEntry, includeRelations []string) []string {
 	if len(includeRelations) == 0 {
 		return []string{}

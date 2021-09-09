@@ -48,6 +48,8 @@ const (
 	REDIRECT_SCHEMA       = "redirect-schema"
 	TRUNCATE_TABLE        = "truncate-table"
 	WITHOUT_GLOBALS       = "without-globals"
+	SKIP_INDEX_BUILD      = "skip-index-build"
+	INDEX_FILE            = "index-file"
 )
 
 func SetBackupFlagDefaults(flagSet *pflag.FlagSet) {
@@ -111,6 +113,8 @@ func SetRestoreFlagDefaults(flagSet *pflag.FlagSet) {
 	flagSet.Bool(WITH_STATS, false, "Restore query plan statistics")
 	flagSet.Bool(LEAF_PARTITION_DATA, false, "For partition tables, create one data file per leaf partition instead of one data file for the whole table")
 	flagSet.Bool(RUN_ANALYZE, false, "Run ANALYZE on restored tables")
+	flagSet.Bool(SKIP_INDEX_BUILD, false, "Disable building indexes")
+	flagSet.String(INDEX_FILE, "index.sql", "A file containing a list of indexes")
 	_ = flagSet.MarkHidden(LEAF_PARTITION_DATA)
 }
 

@@ -17,7 +17,6 @@ import (
 	"github.com/greenplum-db/gpbackup/report"
 	"github.com/greenplum-db/gpbackup/toc"
 	"github.com/greenplum-db/gpbackup/utils"
-
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -410,20 +409,28 @@ func restoreData() (int, map[string][]toc.MasterDataEntry) {
 }
 
 func restorePostdata(metadataFilename string) {
+	var numErrors int32 = 0
+
 	if wasTerminated {
 		return
 	}
 	gplog.Info("Restoring post-data metadata")
 
 	filters := NewFilters(opts.IncludedSchemas, opts.ExcludedSchemas, opts.IncludedRelations, opts.ExcludedRelations)
+	skipIndex := MustGetFlagBool(options.SKIP_INDEX_BUILD)
 
 	statements := GetRestoreMetadataStatementsFiltered("postdata", metadataFilename, []string{}, []string{}, filters)
 	editStatementsRedirectSchema(statements, opts.RedirectSchema)
-	firstBatch, secondBatch, thirdBatch := BatchPostdataStatements(statements)
+	firstBatch, secondBatch, thirdBatch := BatchPostdataStatements(statements, skipIndex)
 	progressBar := utils.NewProgressBar(len(statements), "Post-data objects restored: ", utils.PB_VERBOSE)
 	progressBar.Start()
 
-	numErrors := ExecuteRestoreMetadataStatements(firstBatch, "", progressBar, utils.PB_VERBOSE, connectionPool.NumConns > 1)
+	if skipIndex {
+		numErrors += WriteRestoreStatementsIntoFile(firstBatch, "", progressBar, utils.PB_VERBOSE, connectionPool.NumConns > 1)
+	} else {
+		numErrors += ExecuteRestoreMetadataStatements(firstBatch, "", progressBar, utils.PB_VERBOSE, connectionPool.NumConns > 1)
+	}
+
 	numErrors += ExecuteRestoreMetadataStatements(secondBatch, "", progressBar, utils.PB_VERBOSE, connectionPool.NumConns > 1)
 	numErrors += ExecuteRestoreMetadataStatements(thirdBatch, "", progressBar, utils.PB_VERBOSE, connectionPool.NumConns > 1)
 	progressBar.Finish()
